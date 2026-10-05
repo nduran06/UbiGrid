@@ -1,24 +1,110 @@
-version: '3.8'
+# Full local architecture for UbiGrid: the app itself plus every dependency it
+# needs, all as containers on one Docker network.
+#
+# - ubigrid: the Spring Boot app, built from ../ubigrid/Dockerfile, running
+#   with the "docker" profile so it addresses every service below by name.
+# - floci: drop-in local AWS emulator (replaces LocalStack) — SQS, SNS, S3,
+#   DynamoDB, CloudWatch and SageMaker (control-plane + runtime InvokeEndpoint)
+#   all live at http://floci:4566 with any non-empty credentials.
+# - mongodb / redis / postgres: the datastores UbiGrid's configuration points at.
+#
+# Usage: ./start.sh from the repo root, or directly:
+#   docker compose -f config/docker-compose.yml up -d --build
+#
+# To run the app on the host instead (against these same containers, reached
+# via localhost), use the "local" profile:
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=local   (from ubigrid/)
+
 services:
-  localstack:
-    container_name: localstack
-    image: localstack/localstack:latest
+  ubigrid:
+    container_name: ubigrid-app
+    build:
+      context: ../ubigrid
+      dockerfile: Dockerfile
     ports:
-      - "4566:4566"            # LocalStack Edge Port
-      - "4510-4559:4510-4559"  # External service ports
+      - "8080:8080"
     environment:
-      - DEBUG=1
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - SERVICES=s3,lambda,dynamodb,iot,sqs,sns,kinesis,apigateway,cloudformation,ec2,cognito,kms,iam,events,stepfunctions,redshift,rds,elasticache,elasticsearch,cloudfront
-      - DEFAULT_REGION=us-east-1
-      - PERSISTENCE=1
-      - DATA_DIR=/tmp/localstack/data
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      floci:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - ubigrid-net
+
+  floci:
+    container_name: ubigrid-floci
+    image: floci/floci:latest
+    ports:
+      - "4566:4566"
+    environment:
+      FLOCI_DEFAULT_REGION: us-east-1
+      FLOCI_STORAGE_MODE: hybrid
     volumes:
-      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "floci-data:/app/data"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
-      - localstack-net
+      - ubigrid-net
+
+  mongodb:
+    container_name: ubigrid-mongodb
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: smartcity
+    volumes:
+      - "mongodb-data:/data/db"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ubigrid-net
+
+  redis:
+    container_name: ubigrid-redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ubigrid-net
+
+  postgres:
+    container_name: ubigrid-postgres
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ubigrid
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - "postgres-data:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ubigrid-net
 
 networks:
-  localstack-net:
+  ubigrid-net:
     driver: bridge
+
+volumes:
+  floci-data:
+  mongodb-data:
+  postgres-data:

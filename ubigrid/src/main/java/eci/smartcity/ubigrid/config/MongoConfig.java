@@ -81,7 +81,7 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
 
 	@Override
 	public Collection<String> getMappingBasePackages() {
-		return Arrays.asList("com.smartcity.traffic.model");
+		return Arrays.asList("eci.smartcity.ubigrid.model");
 	}
 
 	@Bean
