@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>UbiGrid — Solicitar vehículo</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/request.css">
+</head>
+<body>
+
+  <div class="info-panel">
+    <div class="panel-heading">
+      <button id="requestBtn" disabled>Fijar punto de recogida</button>
+      <div class="account-dropdown" id="accountDropdown">
+        <button id="accountToggle" type="button">Cuenta ▾</button>
+        <div class="menu">
+          <span id="sessionEmail" class="menu-email"></span>
+          <a id="signOutLink" href="#">Cerrar sesión</a>
+        </div>
+      </div>
+    </div>
+    <div class="creature-picker">
+      <label for="creatureSelect">Criatura mítica</label>
+      <select id="creatureSelect"></select>
+    </div>
+    <div class="traffic-feed" id="trafficFeed">📡 Conectando con el feed de tráfico...</div>
+    <div class="panel-body">
+      <ol id="updates">
+        <li>Bienvenido. Haz clic en el mapa para fijar tu punto de recogida.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/request.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UbiGrid — Registro</title>
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body class="auth-page">
+
+  <div class="auth-header">
+    <a href="index.html">UbiGrid</a>
+  </div>
+
+  <div class="mock-banner">
+    Demo local: no hay un backend de autenticación conectado todavía. Los datos quedan solo en tu navegador.
+  </div>
+
+  <section class="form-wrap">
+    <h1>Crear cuenta</h1>
+    <form id="registerForm">
+      <input type="email" id="email" placeholder="Correo electrónico" required>
+      <input type="password" id="password" placeholder="Contraseña" required>
+      <input type="password" id="password2" placeholder="Confirmar contraseña" required>
+      <input type="submit" value="Registrarme">
+    </form>
+    <p class="hint">¿Ya tienes cuenta? <a href="signin.html">Inicia sesión</a></p>
+  </section>
+
+  <script src="js/auth.js"></script>
+  <script>
+    document.getElementById('registerForm').addEventListener('submit', function onSubmit(event) {
+      event.preventDefault();
+      var email = document.getElementById('email').value;
+      var password = document.getElementById('password').value;
+      var password2 = document.getElementById('password2').value;
+
+      if (password !== password2) {
+        alert('Las contraseñas no coinciden.');
+        return;
+      }
+
+      try {
+        var code = UbiGrid.auth.register(email, password);
+        alert('Registro exitoso. Tu código de verificación (simulado) es: ' + code);
+        window.location.href = 'verify.html?email=' + encodeURIComponent(email);
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  </script>
+</body>
+</html>

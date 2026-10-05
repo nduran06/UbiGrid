@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UbiGrid — Iniciar sesión</title>
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body class="auth-page">
+
+  <div class="auth-header">
+    <a href="index.html">UbiGrid</a>
+  </div>
+
+  <section class="form-wrap">
+    <h1>Iniciar sesión</h1>
+    <form id="signinForm">
+      <input type="email" id="email" placeholder="Correo electrónico" required>
+      <input type="password" id="password" placeholder="Contraseña" required>
+      <input type="submit" value="Iniciar sesión">
+    </form>
+    <p class="hint">¿No tienes cuenta? <a href="register.html">Regístrate</a></p>
+  </section>
+
+  <script src="js/auth.js"></script>
+  <script>
+    document.getElementById('signinForm').addEventListener('submit', function onSubmit(event) {
+      event.preventDefault();
+      var email = document.getElementById('email').value;
+      var password = document.getElementById('password').value;
+
+      try {
+        UbiGrid.auth.signIn(email, password);
+        window.location.href = 'request.html';
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  </script>
+</body>
+</html>

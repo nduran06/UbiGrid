@@ -1,0 +1,151 @@
+html, body, #map {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.info-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 500;
+  width: 300px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 14px rgba(11, 31, 51, 0.2);
+  overflow: hidden;
+}
+
+.info-panel .panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid #e7edf2;
+}
+
+.info-panel .creature-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid #e7edf2;
+  font-size: 0.85rem;
+}
+
+.info-panel .creature-picker select {
+  flex: 1;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.95rem;
+}
+
+.info-panel .traffic-feed {
+  padding: 0.4rem 0.9rem;
+  border-bottom: 1px solid #e7edf2;
+  font-size: 0.8rem;
+  color: #3f5568;
+  background: #f8fafc;
+}
+
+.info-panel .traffic-feed .legend-dot {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  margin: 0 0.15rem 0 0.4rem;
+  vertical-align: middle;
+}
+
+.info-panel .panel-body {
+  padding: 0.75rem 0.9rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+#requestBtn {
+  background: #1560bd;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#requestBtn:disabled {
+  background: #b9c6d1;
+  cursor: not-allowed;
+}
+
+.account-dropdown {
+  position: relative;
+}
+
+.account-dropdown button {
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #1c2b39;
+}
+
+.account-dropdown .menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background: #fff;
+  border: 1px solid #e7edf2;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(11, 31, 51, 0.15);
+  min-width: 120px;
+}
+
+.account-dropdown.open .menu {
+  display: block;
+}
+
+.account-dropdown .menu a {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  color: #1c2b39;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.account-dropdown .menu a:hover {
+  background: #f4f7fa;
+}
+
+.account-dropdown .menu-email {
+  display: block;
+  padding: 0.5rem 0.75rem 0.25rem;
+  color: #5b6b78;
+  font-size: 0.75rem;
+  border-bottom: 1px solid #e7edf2;
+}
+
+#updates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#updates li {
+  border: 1px solid #e7edf2;
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.vehicle-marker-icon {
+  font-size: 1.6rem;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff;
+}

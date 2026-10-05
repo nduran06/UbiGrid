@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UbiGrid — Verificar correo</title>
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body class="auth-page">
+
+  <div class="auth-header">
+    <a href="index.html">UbiGrid</a>
+  </div>
+
+  <div class="mock-banner">
+    Demo local: el código de verificación se mostró en una alerta al registrarte, no llega ningún correo real.
+  </div>
+
+  <section class="form-wrap">
+    <h1>Verificar correo</h1>
+    <form id="verifyForm">
+      <input type="email" id="email" placeholder="Correo electrónico" required>
+      <input type="text" id="code" placeholder="Código de verificación" required>
+      <input type="submit" value="Verificar">
+    </form>
+    <p class="hint">¿Ya verificaste? <a href="signin.html">Inicia sesión</a></p>
+  </section>
+
+  <script src="js/auth.js"></script>
+  <script>
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('email')) {
+      document.getElementById('email').value = params.get('email');
+    }
+
+    document.getElementById('verifyForm').addEventListener('submit', function onSubmit(event) {
+      event.preventDefault();
+      var email = document.getElementById('email').value;
+      var code = document.getElementById('code').value;
+
+      try {
+        UbiGrid.auth.verify(email, code);
+        alert('Verificación exitosa. Ahora puedes iniciar sesión.');
+        window.location.href = 'signin.html';
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  </script>
+</body>
+</html>

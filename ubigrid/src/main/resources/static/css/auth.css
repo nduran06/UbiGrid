@@ -1,0 +1,82 @@
+body.auth-page {
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--ubigrid-bg, #f4f7fa);
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-header {
+  text-align: center;
+  padding: 1.5rem 1rem 0;
+}
+
+.auth-header a {
+  color: #0b1f33;
+  text-decoration: none;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.form-wrap {
+  max-width: 380px;
+  margin: 2.5rem auto;
+  background: #fff;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(11, 31, 51, 0.1);
+  flex: 1 0 auto;
+}
+
+.form-wrap h1 {
+  font-size: 1.4rem;
+  margin-bottom: 1.25rem;
+  color: #0b1f33;
+  text-align: center;
+}
+
+.form-wrap input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.9rem;
+  border: 1px solid #ccd6df;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.form-wrap input[type="submit"] {
+  background: #1560bd;
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form-wrap input[type="submit"]:hover {
+  background: #114e9e;
+}
+
+.form-wrap p.hint {
+  font-size: 0.85rem;
+  color: #5b6b78;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.form-wrap p.hint a {
+  color: #1560bd;
+}
+
+.mock-banner {
+  max-width: 380px;
+  margin: 0 auto -1rem;
+  background: #fff6e0;
+  border: 1px solid #f0d98c;
+  color: #6b5300;
+  padding: 0.6rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  text-align: center;
+}
