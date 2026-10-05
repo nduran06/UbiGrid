@@ -44,7 +44,7 @@ import java.util.Optional;
 public interface RouteRepository extends MongoRepository<Route, String> {
     
     // Find active route by vehicle ID
-    Optional<Route> findByVehicleId(String vehicleId);
+    Optional<Route> findByVehicleIdAndActiveIsTrue(String vehicleId);
     
     // Find all active routes
     List<Route> findByActiveIsTrue();

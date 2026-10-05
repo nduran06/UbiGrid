@@ -205,7 +205,7 @@ public class VehicleTrackingServiceImpl implements VehicleTrackingService {
     
     @Override
     public LocalDateTime getEstimatedTimeOfArrival(String vehicleId) {
-        Optional<Route> routeOpt = routeRepository.findByVehicleId(vehicleId);
+        Optional<Route> routeOpt = routeRepository.findByVehicleIdAndActiveIsTrue(vehicleId);
         
         if (routeOpt.isPresent() && routeOpt.get().isActive()) {
             return routeOpt.get().getEstimatedArrivalTime();
@@ -259,7 +259,7 @@ public class VehicleTrackingServiceImpl implements VehicleTrackingService {
     
     // Helper method to update the progress of an active route
     private void updateRouteProgress(String vehicleId, double latitude, double longitude) {
-        Optional<Route> routeOpt = routeRepository.findByVehicleId(vehicleId);
+        Optional<Route> routeOpt = routeRepository.findByVehicleIdAndActiveIsTrue(vehicleId);
         
         if (!routeOpt.isPresent() || !routeOpt.get().isActive()) {
             return; // No active route

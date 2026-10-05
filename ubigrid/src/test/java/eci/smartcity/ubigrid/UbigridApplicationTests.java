@@ -7,7 +7,9 @@ import org.springframework.test.context.TestPropertySource;
 @SpringBootTest
 @TestPropertySource(properties = {
 		"eureka.client.enabled=false",
-		"spring.cloud.discovery.enabled=false"
+		"spring.cloud.discovery.enabled=false",
+		"ubigrid.seed.vehicles=false",
+		"ubigrid.traffic.feed.enabled=false"
 })
 class UbigridApplicationTests {
 

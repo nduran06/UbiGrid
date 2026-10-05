@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Builds and starts the full UbiGrid local architecture: the app itself plus
-# Floci (local AWS emulator), MongoDB, Redis and PostgreSQL, all as containers
-# on one Docker network. See README.md for details on each piece.
+# Builds and starts the full UbiGrid local architecture: the app itself (API +
+# static front-end), Floci (local AWS emulator), MongoDB, Redis and
+# PostgreSQL, all as containers on one Docker network. See README.md for
+# details on each piece.
 #
 # Usage: ./start.sh
 
@@ -44,13 +45,22 @@ cat <<EOF
 
 ==> UbiGrid is up.
 
-  UbiGrid API       http://localhost:8080
-  Actuator health   http://localhost:8080/actuator/health
-  Swagger UI        http://localhost:8080/swagger-ui.html
-  Floci (AWS)       http://localhost:4566
-  MongoDB           localhost:27017
-  Redis             localhost:6379
-  PostgreSQL        localhost:5432
+  Acceso directo (autologin)
+    >>> http://localhost:8080/request.html?autologin=natalia@mail.com
+
+  Front-end
+    Landing           http://localhost:8080/
+    Registro          http://localhost:8080/register.html
+    Solicitar vehículo http://localhost:8080/request.html
+
+  API y dependencias
+    UbiGrid API       http://localhost:8080
+    Actuator health   http://localhost:8080/actuator/health
+    Swagger UI        http://localhost:8080/swagger-ui.html
+    Floci (AWS)       http://localhost:4566
+    MongoDB           localhost:27017
+    Redis             localhost:6380
+    PostgreSQL        localhost:5435
 
 Logs:    docker compose -f $COMPOSE_FILE logs -f ubigrid
 Stop:    docker compose -f $COMPOSE_FILE down

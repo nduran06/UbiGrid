@@ -19,6 +19,15 @@ public interface TrafficService {
     String getTrafficCondition(double startLat, double startLon, double endLat, double endLon);
     
     /**
+     * Get the average vehicle speed around a point, from the latest traffic readings
+     *
+     * @param lat Latitude
+     * @param lon Longitude
+     * @return Average speed in km/h
+     */
+    double getAverageSpeedKmh(double lat, double lon);
+
+    /**
      * Get the estimated travel time between two points considering current traffic
      * 
      * @param startLat Starting latitude

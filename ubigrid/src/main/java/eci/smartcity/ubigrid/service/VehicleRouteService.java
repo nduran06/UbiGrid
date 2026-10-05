@@ -2,6 +2,7 @@ package eci.smartcity.ubigrid.service;
 
 import java.util.List;
 
+import eci.smartcity.ubigrid.model.RouteEvaluation;
 import eci.smartcity.ubigrid.model.RouteSegment;
 import eci.smartcity.ubigrid.model.enums.RoutePreference;
 
@@ -48,4 +49,13 @@ public interface VehicleRouteService {
      * Recompute routes for all active vehicles to adapt to changing conditions
      */
     void recomputeAllRoutes();
+
+    /**
+     * Candidate paths evaluated by the most recent routing for a vehicle, with
+     * the chosen one flagged
+     *
+     * @param vehicleId The ID of the vehicle
+     * @return Evaluations, or an empty list if the vehicle was never routed
+     */
+    List<RouteEvaluation> getLastEvaluations(String vehicleId);
 }

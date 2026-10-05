@@ -4,16 +4,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import eci.smartcity.ubigrid.model.traffic.TrafficData;
 import eci.smartcity.ubigrid.service.TrafficService;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
 /**
  * Implementation of the TrafficService interface.
- * In a real system, this would connect to traffic data providers or IoT sensors.
- * This implementation provides simulated traffic data for demonstration purposes.
+ * Traffic conditions come from the latest sensor readings published by
+ * TrafficFeedSimulator (fake data standing in for the city's sensor network),
+ * interpolated to any point by inverse-distance weighting. Tolls, road types
+ * and closures are still simulated locally.
  */
 @Service
 public class TrafficServiceImpl implements TrafficService {
@@ -21,17 +25,21 @@ public class TrafficServiceImpl implements TrafficService {
     private static final Logger logger = LoggerFactory.getLogger(TrafficServiceImpl.class);
     private final Random random = new Random();
     
+    private static final double LIGHT_BELOW = 0.40;
+    private static final double MODERATE_BELOW = 0.70;
+    private static final double MIN_SPEED_KMH = 5.0;
+
+    private final TrafficFeedSimulator trafficFeed;
+
     // Cache to provide consistent values for the same locations
-    private final Map<String, String> trafficConditionCache = new HashMap<>();
-    private final Map<String, Integer> travelTimeCache = new HashMap<>();
     private final Map<String, Boolean> tollCache = new HashMap<>();
     private final Map<String, String> roadTypeCache = new HashMap<>();
-    private final Map<String, Double> congestionCache = new HashMap<>();
     
     // Simulated road closures
     private final Map<String, String> roadClosures = new HashMap<>();
     
-    public TrafficServiceImpl() {
+    public TrafficServiceImpl(TrafficFeedSimulator trafficFeed) {
+        this.trafficFeed = trafficFeed;
         // Initialize some simulated road closures
         roadClosures.put("37.7749,-122.4194", "Construction on Market Street");
         roadClosures.put("40.7128,-74.0060", "Road maintenance on Broadway");
@@ -42,59 +50,25 @@ public class TrafficServiceImpl implements TrafficService {
     
     @Override
     public String getTrafficCondition(double startLat, double startLon, double endLat, double endLon) {
-        String key = String.format("%.4f,%.4f-%.4f,%.4f", startLat, startLon, endLat, endLon);
-        
-        if (!trafficConditionCache.containsKey(key)) {
-            // In a real system, this would query a traffic data service
-            // For simulation, we'll generate random traffic conditions
-            String[] conditions = {"LIGHT", "MODERATE", "HEAVY"};
-            int index = random.nextInt(conditions.length);
-            
-            // Bias toward moderate traffic
-            if (random.nextDouble() < 0.4) {
-                index = 1; // MODERATE
-            }
-            
-            trafficConditionCache.put(key, conditions[index]);
+        double congestion = interpolate((startLat + endLat) / 2, (startLon + endLon) / 2)[0];
+        if (congestion < LIGHT_BELOW) {
+            return "LIGHT";
         }
-        
-        return trafficConditionCache.get(key);
+        return congestion < MODERATE_BELOW ? "MODERATE" : "HEAVY";
     }
-    
+
+    @Override
+    public double getAverageSpeedKmh(double lat, double lon) {
+        return Math.max(MIN_SPEED_KMH, interpolate(lat, lon)[1]);
+    }
+
     @Override
     public int getEstimatedTravelTime(double startLat, double startLon, double endLat, double endLon) {
-        String key = String.format("%.4f,%.4f-%.4f,%.4f", startLat, startLon, endLat, endLon);
-        
-        if (!travelTimeCache.containsKey(key)) {
-            // Calculate the direct distance between points (in meters)
-            double distance = calculateDistance(startLat, startLon, endLat, endLon);
-            
-            // Get the traffic condition to adjust travel time
-            String trafficCondition = getTrafficCondition(startLat, startLon, endLat, endLon);
-            
-            // Base travel time: assume 50 km/h (13.9 m/s) average speed
-            int baseTime = (int) (distance / 13.9);
-            
-            // Apply traffic multiplier
-            double multiplier;
-            switch (trafficCondition) {
-                case "HEAVY":
-                    multiplier = 2.5 + random.nextDouble(); // 2.5-3.5x slowdown
-                    break;
-                case "MODERATE":
-                    multiplier = 1.5 + random.nextDouble(); // 1.5-2.5x slowdown
-                    break;
-                default: // LIGHT
-                    multiplier = 1.0 + random.nextDouble() * 0.5; // 1.0-1.5x slowdown
-            }
-            
-            int travelTime = (int) (baseTime * multiplier);
-            travelTimeCache.put(key, travelTime);
-        }
-        
-        return travelTimeCache.get(key);
+        double distance = calculateDistance(startLat, startLon, endLat, endLon);
+        double speedMetersPerSecond = getAverageSpeedKmh((startLat + endLat) / 2, (startLon + endLon) / 2) / 3.6;
+        return (int) (distance / speedMetersPerSecond);
     }
-    
+
     @Override
     public Map<String, String> getRoadClosures(double centerLat, double centerLon, double radiusKm) {
         Map<String, String> closuresInArea = new HashMap<>();
@@ -143,35 +117,9 @@ public class TrafficServiceImpl implements TrafficService {
     
     @Override
     public double getCongestionLevel(double lat, double lon, double radiusKm) {
-        String key = String.format("%.4f,%.4f-%.1f", lat, lon, radiusKm);
-        
-        if (!congestionCache.containsKey(key)) {
-            // Time-based congestion - higher during rush hours
-            int hour = java.time.LocalTime.now().getHour();
-            double baseCongestion;
-            
-            // Rush hour logic
-            if ((hour >= 7 && hour <= 9) || (hour >= 16 && hour <= 18)) {
-                baseCongestion = 0.6 + random.nextDouble() * 0.4; // 0.6-1.0 during rush hour
-            } else if ((hour >= 10 && hour <= 15) || (hour >= 19 && hour <= 21)) {
-                baseCongestion = 0.3 + random.nextDouble() * 0.3; // 0.3-0.6 during business hours
-            } else {
-                baseCongestion = random.nextDouble() * 0.3; // 0.0-0.3 during off hours
-            }
-            
-            // Add some randomization based on location
-            double locationFactor = (Math.sin(lat * 10) + Math.cos(lon * 10)) / 2.0;
-            locationFactor = (locationFactor + 1) / 2.0; // Normalize to 0-1
-            
-            double congestion = baseCongestion * 0.8 + locationFactor * 0.2;
-            congestion = Math.min(1.0, Math.max(0.0, congestion)); // Ensure it's between 0 and 1
-            
-            congestionCache.put(key, congestion);
-        }
-        
-        return congestionCache.get(key);
+        return interpolate(lat, lon)[0];
     }
-    
+
     @Override
     public boolean hasToll(double startLat, double startLon, double endLat, double endLon) {
         String key = String.format("%.4f,%.4f-%.4f,%.4f", startLat, startLon, endLat, endLon);
@@ -232,6 +180,26 @@ public class TrafficServiceImpl implements TrafficService {
         return roadTypeCache.get(key);
     }
     
+    /**
+     * Inverse-distance-weighted blend of every sensor's latest reading at a
+     * point. Returns {congestion (0-1), average speed (km/h)}.
+     */
+    private double[] interpolate(double lat, double lon) {
+        List<TrafficData> readings = trafficFeed.getLatestReadings();
+        double weightSum = 0;
+        double congestion = 0;
+        double speed = 0;
+        for (TrafficData reading : readings) {
+            double km = calculateDistance(lat, lon, reading.getLocation().getLatitude(),
+                    reading.getLocation().getLongitude()) / 1000.0;
+            double weight = 1.0 / Math.pow(km + 0.2, 3);
+            weightSum += weight;
+            congestion += weight * reading.getCongestionLevel();
+            speed += weight * reading.getAverageSpeed();
+        }
+        return new double[] { congestion / weightSum, speed / weightSum };
+    }
+
     // Helper method to check if a point is near a simulated toll area
     private boolean isNearTollArea(double lat, double lon) {
         // Define several "toll centers" (these would be real toll road coordinates in a production system)

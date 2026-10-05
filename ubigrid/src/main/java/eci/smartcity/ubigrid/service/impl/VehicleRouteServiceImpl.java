@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 
 import eci.smartcity.ubigrid.model.GeoLocation;
 import eci.smartcity.ubigrid.model.Route;
+import eci.smartcity.ubigrid.model.RouteEvaluation;
 import eci.smartcity.ubigrid.model.RouteSegment;
 import eci.smartcity.ubigrid.model.Vehicle;
 import eci.smartcity.ubigrid.model.enums.RoutePreference;
@@ -28,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +46,7 @@ public class VehicleRouteServiceImpl implements VehicleRouteService {
 	private final VehicleRepository vehicleRepository;
 	private final RouteRepository routeRepository;
 	private final TrafficService trafficService;
+	private final Map<String, List<RouteEvaluation>> lastEvaluations = new ConcurrentHashMap<>();
 
 	@Autowired
 	public VehicleRouteServiceImpl(RouteSegmentRepository routeSegmentRepository,
@@ -69,7 +71,7 @@ public class VehicleRouteServiceImpl implements VehicleRouteService {
 				.orElseThrow(() -> new IllegalArgumentException("Vehicle not found with ID: " + vehicleId));
 
 		// Deactivate any existing active routes for this vehicle
-		Optional<Route> existingRoute = routeRepository.findByVehicleId(vehicleId);
+		Optional<Route> existingRoute = routeRepository.findByVehicleIdAndActiveIsTrue(vehicleId);
 		existingRoute.ifPresent(route -> {
 			route.setActive(false);
 			routeRepository.save(route);
@@ -95,6 +97,7 @@ public class VehicleRouteServiceImpl implements VehicleRouteService {
 		// Create a new active route
 		Route route = new Route();
 		route.setVehicleId(vehicleId);
+		route.setActive(true);
 		route.setStartLocation(new double[] { vehicleLongitude, vehicleLatitude });
 		route.setDestinationLocation(new double[] { destinationLongitude, destinationLatitude });
 		route.setDestinationLocationId(destinationLocationId);
@@ -171,7 +174,7 @@ public class VehicleRouteServiceImpl implements VehicleRouteService {
 			alternativeRoutes.add(alternativeRoute);
 
 			// Update the active route to include this alternative route ID
-			Optional<Route> routeOpt = routeRepository.findByVehicleId(vehicleId);
+			Optional<Route> routeOpt = routeRepository.findByVehicleIdAndActiveIsTrue(vehicleId);
 			if (routeOpt.isPresent()) {
 				Route route = routeOpt.get();
 				List<String> routeIds = route.getRouteIds();
@@ -216,25 +219,79 @@ public class VehicleRouteServiceImpl implements VehicleRouteService {
 		logger.info("Completed recomputing {} active routes", routes.size());
 	}
 
-	// Helper method to generate route segments
+	@Override
+	public List<RouteEvaluation> getLastEvaluations(String vehicleId) {
+		return lastEvaluations.getOrDefault(vehicleId, List.of());
+	}
+
+	// Lateral bow of each candidate path, as a fraction of the direct distance.
+	private static final double[] BOW_FRACTIONS = { 0.0, 0.2, -0.2, 0.35, -0.35 };
+	private static final int TOLL_PENALTY_SECONDS = 600;
+	private static final int HIGHWAY_PENALTY_SECONDS = 300;
+
+	private record Candidate(String label, List<RouteSegment> segments, double distance, int duration, double cost) {
+	}
+
+	// Prices several candidate paths against the live traffic readings and
+	// returns the cheapest one, recording every evaluation for the caller.
 	private List<RouteSegment> generateRouteSegments(String vehicleId, double startLon, double startLat, double endLon,
 			double endLat, RoutePreference preference) {
 
-		List<RouteSegment> segments = new ArrayList<>();
-
-		// In a real implementation, this would call a routing service or algorithm
-		// For this example, we'll generate a simplified route with waypoints
-
-		// Calculate the direct distance between start and end
 		double directDistance = calculateDistance(startLat, startLon, endLat, endLon);
 
 		// Determine number of segments based on distance (1 segment per km, minimum 3)
 		int numSegments = Math.max(3, (int) (directDistance / 1000));
 
-		// Generate waypoints between start and end
-		List<double[]> waypoints = generateWaypoints(startLon, startLat, endLon, endLat, numSegments, preference);
+		List<Candidate> candidates = new ArrayList<>();
+		for (double bow : BOW_FRACTIONS) {
+			List<double[]> waypoints = generateWaypoints(startLon, startLat, endLon, endLat, numSegments, bow);
+			List<RouteSegment> segments = buildSegments(waypoints, numSegments);
+			candidates.add(scoreCandidate(describeBow(bow, startLon, startLat, endLon, endLat), segments, preference));
+		}
 
-		// Create route segments for each pair of waypoints
+		Candidate best = candidates.stream().min(Comparator.comparingDouble(Candidate::cost)).get();
+
+		List<RouteEvaluation> evaluations = new ArrayList<>();
+		for (Candidate candidate : candidates) {
+			evaluations.add(new RouteEvaluation(candidate.label(), candidate.distance(), candidate.duration(),
+					worstTrafficLevel(candidate.segments()), candidate == best));
+		}
+		lastEvaluations.put(vehicleId, evaluations);
+
+		logger.info("Evaluated {} candidate routes against live traffic; chose '{}' ({}s)", candidates.size(),
+				best.label(), best.duration());
+		return best.segments();
+	}
+
+	private Candidate scoreCandidate(String label, List<RouteSegment> segments, RoutePreference preference) {
+		double distance = segments.stream().mapToDouble(RouteSegment::getDistanceMeters).sum();
+		int duration = segments.stream().mapToInt(RouteSegment::getDurationSeconds).sum();
+
+		double cost = preference == RoutePreference.SHORTEST ? distance : duration;
+		if (preference == RoutePreference.AVOID_TOLLS) {
+			cost += TOLL_PENALTY_SECONDS * segments.stream().filter(RouteSegment::isTollRequired).count();
+		}
+		if (preference == RoutePreference.AVOID_HIGHWAYS || preference == RoutePreference.SCENIC) {
+			cost += HIGHWAY_PENALTY_SECONDS * segments.stream().filter(sg -> "HIGHWAY".equals(sg.getRoadType())).count();
+		}
+		return new Candidate(label, segments, distance, duration, cost);
+	}
+
+	private String worstTrafficLevel(List<RouteSegment> segments) {
+		if (segments.stream().anyMatch(sg -> "HEAVY".equals(sg.getTrafficLevel()))) {
+			return "HEAVY";
+		}
+		if (segments.stream().anyMatch(sg -> "MODERATE".equals(sg.getTrafficLevel()))) {
+			return "MODERATE";
+		}
+		return "LIGHT";
+	}
+
+	// Creates route segments for each pair of waypoints, with duration derived
+	// from the average speed the traffic readings report around each segment.
+	private List<RouteSegment> buildSegments(List<double[]> waypoints, int numSegments) {
+		List<RouteSegment> segments = new ArrayList<>();
+
 		for (int i = 0; i < waypoints.size() - 1; i++) {
 			double[] startPoint = waypoints.get(i);
 			double[] endPoint = waypoints.get(i + 1);
@@ -244,44 +301,22 @@ public class VehicleRouteServiceImpl implements VehicleRouteService {
 			segment.setStartLocation(startPoint);
 			segment.setEndLocation(endPoint);
 
-			// Calculate segment details
 			double segmentDistance = calculateDistance(startPoint[1], startPoint[0], // lat, lon for start
 					endPoint[1], endPoint[0]); // lat, lon for end
 			segment.setDistanceMeters(segmentDistance);
 
-			// Get traffic conditions for this segment
-			String trafficLevel = trafficService.getTrafficCondition(startPoint[1], startPoint[0], endPoint[1],
-					endPoint[0]);
-			segment.setTrafficLevel(trafficLevel);
+			double midLat = (startPoint[1] + endPoint[1]) / 2;
+			double midLon = (startPoint[0] + endPoint[0]) / 2;
 
-			// Calculate duration based on distance and traffic
-			int durationFactor;
-			switch (trafficLevel) {
-			case "HEAVY":
-				durationFactor = 3; // 3x slower in heavy traffic
-				break;
-			case "MODERATE":
-				durationFactor = 2; // 2x slower in moderate traffic
-				break;
-			default:
-				durationFactor = 1; // Normal speed in light traffic
-			}
+			segment.setTrafficLevel(trafficService.getTrafficCondition(startPoint[1], startPoint[0], endPoint[1],
+					endPoint[0]));
 
-			// Base duration: assume 50 km/h (13.9 m/s) average speed
-			int baseDuration = (int) (segmentDistance / 13.9);
-			segment.setDurationSeconds(baseDuration * durationFactor);
+			double speedMetersPerSecond = trafficService.getAverageSpeedKmh(midLat, midLon) / 3.6;
+			segment.setDurationSeconds((int) (segmentDistance / speedMetersPerSecond));
 
-			// Check if this segment has a toll
 			segment.setTollRequired(trafficService.hasToll(startPoint[1], startPoint[0], endPoint[1], endPoint[0]));
-
-			// Get road type for this segment
-			segment.setRoadType(
-					trafficService.getRoadType((startPoint[1] + endPoint[1]) / 2, (startPoint[0] + endPoint[0]) / 2));
-
-			// Set navigation instructions
+			segment.setRoadType(trafficService.getRoadType(midLat, midLon));
 			segment.setInstructions(generateInstructions(i, numSegments, segment.getRoadType()));
-
-			// Set maneuver type
 			segment.setManeuverType(determineManeuverType(i > 0 ? waypoints.get(i - 1) : null, startPoint, endPoint));
 
 			segments.add(segment);
@@ -290,90 +325,47 @@ public class VehicleRouteServiceImpl implements VehicleRouteService {
 		return segments;
 	}
 
-	// Generate waypoints between start and end points
+	// Waypoints along the straight line from start to end, bowed sideways by
+	// bowFraction * direct distance at the midpoint (0 = straight line).
 	private List<double[]> generateWaypoints(double startLon, double startLat, double endLon, double endLat,
-			int numPoints, RoutePreference preference) {
+			int numSegments, double bowFraction) {
 
 		List<double[]> waypoints = new ArrayList<>();
-
-		// Add starting point
 		waypoints.add(new double[] { startLon, startLat });
 
-		// Determine if we should avoid highways based on preference
-		boolean avoidHighways = preference == RoutePreference.AVOID_HIGHWAYS || preference == RoutePreference.SCENIC;
+		double dLat = endLat - startLat;
+		double dLon = endLon - startLon;
+		// Perpendicular (left of travel direction) in degree space, scaled to the segment length
+		double perpLat = dLon;
+		double perpLon = -dLat;
 
-		// Determine if we should avoid tolls
-		boolean avoidTolls = preference == RoutePreference.AVOID_TOLLS;
-
-		// Generate intermediate waypoints with some randomization for realistic routes
-		for (int i = 1; i < numPoints; i++) {
-			double ratio = (double) i / numPoints;
-
-			// Basic linear interpolation
-			double lat = startLat + (endLat - startLat) * ratio;
-			double lon = startLon + (endLon - startLon) * ratio;
-
-			// Add some randomness based on preference
-			double randomFactor = getRandomFactorForPreference(preference);
-
-			// The further from start/end, the more deviation we allow
-			double deviationFactor = ratio * (1 - ratio) * 4; // Maximum at 0.5 (midpoint)
-
-			// Apply randomness
-			lat += (Math.random() - 0.5) * 0.01 * randomFactor * deviationFactor;
-			lon += (Math.random() - 0.5) * 0.01 * randomFactor * deviationFactor;
-
-			// If needed, ensure point is not on a highway
-			if (avoidHighways) {
-				String roadType = trafficService.getRoadType(lat, lon);
-				if ("HIGHWAY".equals(roadType)) {
-					// Shift point away from highway
-					lat += (Math.random() - 0.5) * 0.005;
-					lon += (Math.random() - 0.5) * 0.005;
-				}
-			}
-
-			// If needed, ensure point is not on a toll road
-			if (avoidTolls) {
-				boolean hasToll = trafficService.hasToll(waypoints.get(waypoints.size() - 1)[1], // Previous point lat
-						waypoints.get(waypoints.size() - 1)[0], // Previous point lon
-						lat, lon);
-				if (hasToll) {
-					// Shift point away from toll road
-					lat += (Math.random() - 0.5) * 0.005;
-					lon += (Math.random() - 0.5) * 0.005;
-				}
-			}
-
-			waypoints.add(new double[] { lon, lat });
+		for (int i = 1; i < numSegments; i++) {
+			double ratio = (double) i / numSegments;
+			double bow = bowFraction * Math.sin(Math.PI * ratio);
+			waypoints.add(new double[] { startLon + dLon * ratio + perpLon * bow, startLat + dLat * ratio + perpLat * bow });
 		}
 
-		// Add ending point
 		waypoints.add(new double[] { endLon, endLat });
-
 		return waypoints;
 	}
 
-	// Get random factor for route variation based on preference
-	private double getRandomFactorForPreference(RoutePreference preference) {
-		switch (preference) {
-		case SHORTEST:
-			return 0.2; // Very little randomness for shortest route
-		case FASTEST:
-			return 0.5; // Some randomness for fastest route (to use highways)
-		case SCENIC:
-			return 2.0; // High randomness for scenic routes
-		case AVOID_HIGHWAYS:
-			return 1.5; // Higher randomness to find alternate paths
-		case AVOID_TOLLS:
-			return 1.2; // Higher randomness to avoid toll roads
-		case ECO_FRIENDLY:
-			return 0.8; // Moderate randomness for eco routes
-		case EFFICIENT:
-			return 0.5; // Moderate randomness for efficient routes
-		default:
-			return 1.0;
+	// Human-readable name for a candidate, by where its midpoint bows to.
+	private String describeBow(double bowFraction, double startLon, double startLat, double endLon, double endLat) {
+		if (bowFraction == 0.0) {
+			return "Ruta directa";
 		}
+		double perpLat = endLon - startLon;
+		double perpLon = -(endLat - startLat);
+		double sign = Math.signum(bowFraction);
+		double offsetLat = perpLat * sign;
+		double offsetLon = perpLon * sign;
+		String side;
+		if (Math.abs(offsetLat) >= Math.abs(offsetLon)) {
+			side = offsetLat >= 0 ? "norte" : "sur";
+		} else {
+			side = offsetLon >= 0 ? "este" : "oeste";
+		}
+		return (Math.abs(bowFraction) > 0.3 ? "Desvío amplio por el " : "Desvío por el ") + side;
 	}
 
 	// Get an alternative preference for generating route variations
