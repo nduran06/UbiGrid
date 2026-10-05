@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  localstack:
+    container_name: localstack
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"            # LocalStack Edge Port
+      - "4510-4559:4510-4559"  # External service ports
+    environment:
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - SERVICES=s3,lambda,dynamodb,iot,sqs,sns,kinesis,apigateway,cloudformation,ec2,cognito,kms,iam,events,stepfunctions,redshift,rds,elasticache,elasticsearch,cloudfront
+      - DEFAULT_REGION=us-east-1
+      - PERSISTENCE=1
+      - DATA_DIR=/tmp/localstack/data
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - localstack-net
+
+networks:
+  localstack-net:
+    driver: bridge

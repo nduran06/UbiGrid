@@ -1,0 +1,15 @@
+python3 -m venv venv_py310
+virtualenv -p python3.10 venv_py310
+source venv_py310/bin/activate
+
+# Create the necessary directory
+mkdir -p ~/.docker/cli-plugins/
+
+# Download Docker Compose V2
+curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose
+
+# Make it executable
+chmod +x ~/.docker/cli-plugins/docker-compose
+
+# Create a symlink for convenience (optional)
+sudo ln -s ~/.docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
